@@ -1,0 +1,19 @@
+[package]
+name = "fastdropbox"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+alfred = "4.0.2"
+clap = { version = "4.1.9", features = ["derive"] }
+rustix = "0.37.1"
+walkdir = "2"
+toml = "0.7.3"
+serde = { version = "1.0.32", features = ["derive"] }
+
+
+[dev-dependencies]
+clap = "4.1.9"
+derive = "1.0.0"
