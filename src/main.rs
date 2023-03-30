@@ -9,7 +9,6 @@ use std::process::Command;
 use alfred::{Item, Modifier};
 use clap::{Arg, arg};
 use clap::Parser;
-use walkdir::WalkDir;
 use serde::Serialize;
 use serde::Deserialize;
 
@@ -24,14 +23,17 @@ struct Args {
     #[arg(short, long, value_name = "device_id")]
     device_id: Option<String>,
 
-    #[arg(short, long, value_name = "workspace")]
-    workspace: Option<String>,
+    #[arg(long, value_name = "apk_dir")]
+    apk_dir: Option<String>,
+
+    #[arg(long, value_name = "apk_path")]
+    apk_path: Option<String>,
 
 }
 
 #[derive(Deserialize, Debug, Serialize)]
 struct Config {
-    workspace: String,
+    apk_dir: String,
 }
 
 fn read_config() -> Config {
@@ -56,27 +58,33 @@ fn get_config_file() -> File {
 fn write_config(config: Config) {
     let mut config_file = get_config_file();
     let string = toml::to_string(&config).unwrap();
-    config_file.write(&string.as_bytes()).unwrap();
+    match config_file.write(&string.as_bytes()) {
+        Ok(_) => {
+            simple_write_alfred_output("设置配置成功", "", "")
+        }
+        Err(err) => {
+            simple_write_alfred_output("设置配置失败", &err.to_string(), &err.to_string())
+        }
+    }
 }
 
-fn set_workspace(args: &Args) {
-    if let Some(workspace) = &args.workspace {
+fn set_apk_dir(args: &Args) {
+    if let Some(workspace) = &args.apk_dir {
         write_config(Config {
-            workspace: workspace.clone(),
+            apk_dir: workspace.clone(),
         })
     }
 }
 
-fn get_workspace() -> String {
+fn get_apk_dir() -> String {
     let config = read_config();
     // 所有权交出去了 那我 config 咋整？
-    return config.workspace;
+    return config.apk_dir;
 }
 
 fn main() {
     let args = Args::parse();
 
-    set_workspace(&args);
 
     // println!("fun_name = {}", args.fun_name);
     if args.fun_name == "crash" {
@@ -84,17 +92,61 @@ fn main() {
             find_crash(device_id);
         }
     } else if args.fun_name == "devices" {
-        find_devices()
+        find_devices(&args);
     } else if args.fun_name == "open_debug" {
         if let Some(device_id) = args.device_id {
-            open_douyin_debug(device_id)
+            open_douyin_debug(device_id);
         }
     } else if args.fun_name == "did" {
         // 展示 did
-        show_my_did()
+        show_my_did();
     } else if args.fun_name == "usb" {
-        restart_usb()
+        restart_usb();
+    } else if args.fun_name == "ins" {
+        install_apk(&args);
+    } else if args.fun_name == "find_apk" {
+        find_apk(&args);
+    } else if args.fun_name == "apk_dir" {
+        set_apk_dir(&args);
     }
+}
+
+fn find_apk(args: &Args) {
+    let path = get_apk_dir(); // 设置工作
+    let path = Path::new(&path);
+
+    match fs::read_dir(path) {
+        Ok(path) => {
+            let mut alfred_items: Vec<Item> = Vec::new();
+            for entry in path {
+                if let Ok(entry) = entry {
+                    let file = entry.path();
+                    let filename = file.to_str().clone().unwrap().to_string();
+                    alfred_items.push(
+                        alfred::ItemBuilder::new("apk")
+                            .arg(filename.clone())
+                            .subtitle(filename.clone())
+                            .into_item()
+                    )
+                }
+            }
+            alfred::json::Builder::with_items(&alfred_items)
+                .write(io::stdout()).expect("error")
+        }
+        Err(error) => {
+            simple_write_alfred_output("读取目录失败", &error.to_string(), &error.to_string())
+        }
+    }
+}
+
+fn install_apk(args: &Args) {
+   if let Some(apk_path) = &args.apk_path {
+       if let Some(device_id) = &args.device_id {
+           let output = Command::new("adb").arg("-s").arg(&device_id).arg("install").arg("-r").arg("-d").arg(&apk_path).output().expect("ddd").stdout;
+           let output = String::from_utf8(output).expect("转义失败");
+           simple_write_alfred_output("安装结果", &output, &output)
+       }
+   }
 }
 
 fn simple_write_alfred_output(title: &str, arg: &str, sub_title: &str) {
@@ -140,7 +192,7 @@ fn open_douyin_debug(device_id: String) {
     simple_write_alfred_output("打开抖音 debug 页面", &output, "")
 }
 
-fn find_devices() {
+fn find_devices(args: &Args) {
     let output = Command::new("adb").arg("devices").output().expect("执行 adb devices").stdout;
     let output = String::from_utf8(output).expect("转义失败");
     let mut all_devices: Vec<&str> = output.split("\n").filter(|x| {
@@ -150,9 +202,14 @@ fn find_devices() {
         return device.replace("device", "").trim().to_string();
     }).collect();
     let mut alfred_items: Vec<Item> = Vec::new();
+    let mut apk_path = String::new();
+    if let Some(path) = &args.apk_path {
+        apk_path = path.to_string().clone();
+    }
     for device in all_devices {
+        let mut device = device.clone();
         alfred_items.push(alfred::ItemBuilder::new(device.clone())
-            .arg(device.clone())
+            .arg(device)
             .subtitle("设备 id")
             .into_item())
     }
@@ -177,7 +234,12 @@ fn find_crash(device_id: String) {
             match target {
                 None => simple_write_alfred_output("最近没有异常", "", ""),
                 Some(first) => {
-                    let detail_out_put = Command::new("adb").arg("-s").arg(device_id.clone()).arg("shell").arg("dumpsys").arg("dropbox").arg("--print").arg(first).output().expect("执行异常");
+                    let mut real_device_id = String::new();
+                    if device_id.contains("+") {
+                        let x:Vec<&str> = device_id.split("+").collect();
+                        real_device_id = x[0].parse().unwrap();
+                    }
+                    let detail_out_put = Command::new("adb").arg("-s").arg(real_device_id).arg("shell").arg("dumpsys").arg("dropbox").arg("--print").arg(first).output().expect("执行异常");
                     let detail_out_put_string = String::from_utf8(detail_out_put.stdout).expect("转义失败");
                     simple_write_alfred_output("崩溃堆栈", &detail_out_put_string, &detail_out_put_string)
                 }
