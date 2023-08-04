@@ -82,34 +82,6 @@ fn get_apk_dir() -> String {
     return config.apk_dir;
 }
 
-fn main() {
-    let args = Args::parse();
-
-
-    // println!("fun_name = {}", args.fun_name);
-    if args.fun_name == "crash" {
-        if let Some(device_id) = args.device_id {
-            find_crash(device_id);
-        }
-    } else if args.fun_name == "devices" {
-        find_devices(&args);
-    } else if args.fun_name == "open_debug" {
-        if let Some(device_id) = args.device_id {
-            open_douyin_debug(device_id);
-        }
-    } else if args.fun_name == "did" {
-        // 展示 did
-        show_my_did();
-    } else if args.fun_name == "usb" {
-        restart_usb();
-    } else if args.fun_name == "ins" {
-        install_apk(&args);
-    } else if args.fun_name == "find_apk" {
-        find_apk(&args);
-    } else if args.fun_name == "apk_dir" {
-        set_apk_dir(&args);
-    }
-}
 
 fn find_apk(args: &Args) {
     let path = get_apk_dir(); // 设置工作
@@ -140,13 +112,13 @@ fn find_apk(args: &Args) {
 }
 
 fn install_apk(args: &Args) {
-   if let Some(apk_path) = &args.apk_path {
-       if let Some(device_id) = &args.device_id {
-           let output = Command::new("adb").arg("-s").arg(&device_id).arg("install").arg("-r").arg("-d").arg(&apk_path).output().expect("ddd").stdout;
-           let output = String::from_utf8(output).expect("转义失败");
-           simple_write_alfred_output("安装结果", &output, &output)
-       }
-   }
+    if let Some(apk_path) = &args.apk_path {
+        if let Some(device_id) = &args.device_id {
+            let output = Command::new("adb").arg("-s").arg(&device_id).arg("install").arg("-r").arg("-d").arg(&apk_path).output().expect("ddd").stdout;
+            let output = String::from_utf8(output).expect("转义失败");
+            simple_write_alfred_output("安装结果", &output, &output)
+        }
+    }
 }
 
 fn simple_write_alfred_output(title: &str, arg: &str, sub_title: &str) {
@@ -178,9 +150,13 @@ fn show_my_did() {
             .arg("3069463893389480")
             .subtitle("3069463893389480")
             .into_item(),
-        alfred::ItemBuilder::new("模拟器")
-            .arg("266498979143011")
-            .subtitle("266498979143011")
+        alfred::ItemBuilder::new("模拟器 31")
+            .arg("1515590371803511")
+            .subtitle("1515590371803511")
+            .into_item(),
+        alfred::ItemBuilder::new("模拟器 30")
+            .arg("108216317651171")
+            .subtitle("108216317651171")
             .into_item(),
     ]).write(io::stdout()).expect("ff")
 }
@@ -210,6 +186,7 @@ fn find_devices(args: &Args) {
         let mut device = device.clone();
         alfred_items.push(alfred::ItemBuilder::new(device.clone())
             .arg(device)
+            .variable("apk_path", &apk_path)
             .subtitle("设备 id")
             .into_item())
     }
@@ -236,14 +213,59 @@ fn find_crash(device_id: String) {
                 Some(first) => {
                     let mut real_device_id = String::new();
                     if device_id.contains("+") {
-                        let x:Vec<&str> = device_id.split("+").collect();
+                        let x: Vec<&str> = device_id.split("+").collect();
                         real_device_id = x[0].parse().unwrap();
+                    } else {
+                        real_device_id = device_id.clone();
                     }
+                    // println!("read_deviceId = {}, deviceId = {}", real_device_id, device_id);
                     let detail_out_put = Command::new("adb").arg("-s").arg(real_device_id).arg("shell").arg("dumpsys").arg("dropbox").arg("--print").arg(first).output().expect("执行异常");
                     let detail_out_put_string = String::from_utf8(detail_out_put.stdout).expect("转义失败");
                     simple_write_alfred_output("崩溃堆栈", &detail_out_put_string, &detail_out_put_string)
                 }
             }
+        }
+    }
+}
+
+// 打开抖音 app
+fn open_douyin_app(device_id: String) {
+    let output = Command::new("adb").args(["-s", &device_id, "shell", "am", "start", "-n", " com.ss.android.ugc.aweme/.main.MainActivity"]).output().expect("ddd").stdout;
+    let output = String::from_utf8(output).expect("转义失败");
+    simple_write_alfred_output("打开抖音成功", &output, &output);
+}
+
+
+fn main() {
+    let args = Args::parse();
+
+
+    // println!("fun_name = {}", args.fun_name);
+    if args.fun_name == "crash" {
+        if let Some(device_id) = args.device_id {
+            find_crash(device_id);
+        }
+    } else if args.fun_name == "devices" {
+        find_devices(&args);
+    } else if args.fun_name == "open_debug" {
+        if let Some(device_id) = args.device_id {
+            open_douyin_debug(device_id);
+        }
+    } else if args.fun_name == "did" {
+        // 展示 did
+        show_my_did();
+    } else if args.fun_name == "usb" {
+        restart_usb();
+    } else if args.fun_name == "ins" {
+        install_apk(&args);
+    } else if args.fun_name == "find_apk" {
+        find_apk(&args);
+    } else if args.fun_name == "apk_dir" {
+        set_apk_dir(&args);
+    } else if args.fun_name == "open_douyin" {
+        // 打开抖音 app
+        if let Some(device_id) = args.device_id {
+            open_douyin_app(device_id)
         }
     }
 }
