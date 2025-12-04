@@ -112,7 +112,7 @@ fn find_apk(args: &Args) {
 }
 
 fn install_apk(args: &Args) {
-    if let Some(apk_path) = &args.apk_path {
+    if let Some(apk_path) = &args.apk_path { 1
         if let Some(device_id) = &args.device_id {
             let output = Command::new("adb").arg("-s").arg(&device_id).arg("install").arg("-r").arg("-d").arg(&apk_path).output().expect("ddd").stdout;
             let output = String::from_utf8(output).expect("转义失败");
@@ -134,31 +134,6 @@ fn restart_usb() {
     let output = Command::new("adb").arg("usb").output().expect("").stdout;
     let output = String::from_utf8(output).expect("转义失败");
     simple_write_alfred_output("重启 usb成功", &output, "");
-}
-
-fn show_my_did() {
-    alfred::json::Builder::with_items(&[
-        alfred::ItemBuilder::new("pix 6")
-            .arg("1148358348243358")
-            .subtitle("1148358348243358")
-            .into_item(),
-        alfred::ItemBuilder::new("小米手机")
-            .arg("954797464765992")
-            .subtitle("954797464765992")
-            .into_item(),
-        alfred::ItemBuilder::new("华为手机")
-            .arg("3069463893389480")
-            .subtitle("3069463893389480")
-            .into_item(),
-        alfred::ItemBuilder::new("模拟器 31")
-            .arg("1515590371803511")
-            .subtitle("1515590371803511")
-            .into_item(),
-        alfred::ItemBuilder::new("模拟器 30")
-            .arg("108216317651171")
-            .subtitle("108216317651171")
-            .into_item(),
-    ]).write(io::stdout()).expect("ff")
 }
 
 fn open_douyin_debug(device_id: String) {
@@ -192,6 +167,75 @@ fn find_devices(args: &Args) {
     }
     alfred::json::Builder::with_items(&alfred_items)
         .write(io::stdout()).expect("error")
+}
+
+fn find_did(device_id: String) {
+    let output = Command::new("adb")
+        .arg("-s")
+        .arg(device_id.clone())
+        .arg("shell")
+        .arg("am")
+        .arg("broadcast")
+        .arg("-a")
+        .arg("com.ss.android.ugc.aweme.util.crony.action_info")
+        .arg("-e")
+        .arg("key")
+        .arg("default")
+        .output().expect("执行异常");
+
+    let all_string = String::from_utf8(output.stdout).expect("转义失败");
+    let all_line: Vec<&str> = all_string.split("\n").collect();
+    for line in all_line {
+        if line.contains("DeviceId") {
+            let did_strings: Vec<&str> = line.split(":").collect();
+            match did_strings.last() {
+                None => simple_write_alfred_output("没有找到 did", "", ""),
+                Some(last) => {
+                    simple_write_alfred_output(last, last, "")
+                }
+            }
+        }
+    }
+}
+
+
+fn find_device_info(device_id: String) {
+    let output = Command::new("adb")
+        .arg("-s")
+        .arg(device_id.clone())
+        .arg("shell")
+        .arg("am")
+        .arg("broadcast")
+        .arg("-a")
+        .arg("com.ss.android.ugc.aweme.util.crony.action_info")
+        .arg("-e")
+        .arg("key")
+        .arg("default")
+        .output().expect("执行异常");
+
+    let all_string = String::from_utf8(output.stdout).expect("转义失败");
+    simple_write_alfred_output(&all_string, &all_string, "")
+}
+
+
+fn login(device_id: String) {
+    let output = Command::new("adb")
+        .arg("-s")
+        .arg(device_id.clone())
+        .arg("shell")
+        .arg("am")
+        .arg("broadcast")
+        .arg("-a")
+        .arg("com.ss.android.ugc.aweme.util.crony.action_login_pwd")
+        .arg("-e")
+        .arg("phone")
+        .arg("18612240137")
+        .arg("-e")
+        .arg("password")
+        .arg("w123456256456")
+        .output().expect("执行异常");
+    let all_string = String::from_utf8(output.stdout).expect("转义失败");
+    simple_write_alfred_output(&all_string, &all_string, "")
 }
 
 fn find_crash(device_id: String) {
@@ -235,6 +279,16 @@ fn open_douyin_app(device_id: String) {
     simple_write_alfred_output("打开抖音成功", &output, &output);
 }
 
+fn restart_douyin_app(device_id: String) {
+    // adb shell am force-stop com.ss.android.ugc.aweme
+    let output = Command::new("adb").args(["-s", &device_id, "shell", "am", "force-stop", " com.ss.android.ugc.aweme"]).output().expect("ddd").stdout;
+    let output = String::from_utf8(output).expect("转义失败");
+    simple_write_alfred_output("关闭抖音成功", &output, &output);
+    let output2 = Command::new("adb").args(["-s", &device_id, "shell", "am", "start", "-n", " com.ss.android.ugc.aweme/.main.MainActivity"]).output().expect("ddd").stdout;
+    let output2 = String::from_utf8(output2).expect("转义失败");
+    simple_write_alfred_output("重启抖音成功", &output2, &output2);
+}
+
 
 fn main() {
     let args = Args::parse();
@@ -253,7 +307,13 @@ fn main() {
         }
     } else if args.fun_name == "did" {
         // 展示 did
-        show_my_did();
+        if let Some(device_id) = args.device_id {
+            find_did(device_id)
+        }
+    } else if args.fun_name == "device_info" {
+        if let Some(device_id) = args.device_id {
+            find_device_info(device_id)
+        }
     } else if args.fun_name == "usb" {
         restart_usb();
     } else if args.fun_name == "ins" {
@@ -267,5 +327,14 @@ fn main() {
         if let Some(device_id) = args.device_id {
             open_douyin_app(device_id)
         }
+    } else if args.fun_name == "restart_douyin" {
+        if let Some(device_id) = args.device_id {
+            restart_douyin_app(device_id)
+        }
+    } else if args.fun_name == "login" {
+        if let Some(device_id) = args.device_id {
+            login(device_id)
+        }
     }
+    // adb shell am broadcast -a com.ss.android.ugc.aweme.util.crony.action_ppe -e lane abcd   ppe
 }
